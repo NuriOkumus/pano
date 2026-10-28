@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,9 +39,11 @@ func writeClaudeDir(t *testing.T) string {
 	must(t, os.WriteFile(filepath.Join(sk, "notes.md"), []byte(strings.Repeat("y", 800)), 0o644))
 	must(t, os.MkdirAll(filepath.Join(dir, "commands"), 0o755))
 	must(t, os.WriteFile(filepath.Join(dir, "commands", "calibrate.md"), []byte("---\ndescription: \"Tune up\"\n---\nbody"), 0o644))
-	plug := filepath.Join(dir, "plugins", "marketplaces", "m", "tools", "skills", "lint")
-	must(t, os.MkdirAll(plug, 0o755))
-	must(t, os.WriteFile(filepath.Join(plug, "SKILL.md"), []byte("---\nname: lint\n---\n"), 0o644))
+	plug := filepath.Join(dir, "plugins", "cache", "m", "tools", "1.0.0")
+	must(t, os.MkdirAll(filepath.Join(plug, "skills", "lint"), 0o755))
+	must(t, os.WriteFile(filepath.Join(plug, "skills", "lint", "SKILL.md"), []byte("---\nname: lint\n---\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(dir, "plugins", "installed_plugins.json"),
+		[]byte(`{"version":2,"plugins":{"tools@m":[{"scope":"user","installPath":`+strconv.Quote(plug)+`}]}}`), 0o644))
 
 	must(t, os.MkdirAll(filepath.Join(dir, "notes"), 0o755))
 	must(t, os.WriteFile(filepath.Join(dir, "notes", "infra.md"), []byte("# Infra\nline\n"), 0o644))

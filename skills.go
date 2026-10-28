@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -66,26 +67,18 @@ func scanSkills(claudeDir string, projects []string, usage map[string]stamp) []S
 			add(s)
 		}
 	}
-	// Plugins: any skills/<name>/SKILL.md under ~/.claude/plugins. Marketplaces
-	// keep a second copy of each plugin, so the plugin:name key dedupes them.
-	pluginRoot := filepath.Join(claudeDir, "plugins")
-	_ = filepath.WalkDir(pluginRoot, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
+	// Plugins: only the installed ones, named by installed_plugins.json. The
+	// marketplace catalogue next to them lists plugins that are not installed.
+	for _, pl := range installedPlugins(claudeDir) {
+		for _, s := range skillsIn(filepath.Join(pl.dir, "skills"), "plugin", pl.name) {
+			s.Name = pl.name + ":" + s.Name
+			add(s)
 		}
-		if d.IsDir() && (d.Name() == "node_modules" || d.Name() == ".git") {
-			return filepath.SkipDir
+		for _, s := range commandsIn(filepath.Join(pl.dir, "commands"), "plugin", pl.name) {
+			s.Name = pl.name + ":" + s.Name
+			add(s)
 		}
-		if d.IsDir() && d.Name() == "skills" {
-			plugin := filepath.Base(filepath.Dir(p))
-			for _, s := range skillsIn(p, "plugin", plugin) {
-				s.Name = plugin + ":" + s.Name
-				add(s)
-			}
-			return filepath.SkipDir
-		}
-		return nil
-	})
+	}
 
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Tokens == out[j].Tokens {
@@ -93,6 +86,40 @@ func scanSkills(claudeDir string, projects []string, usage map[string]stamp) []S
 		}
 		return out[i].Tokens > out[j].Tokens
 	})
+	return out
+}
+
+type plugin struct{ name, dir string }
+
+// installedPlugins reads plugins/installed_plugins.json (version 2): one key
+// per "name@marketplace", each with the folders it is installed in.
+func installedPlugins(claudeDir string) []plugin {
+	b, err := os.ReadFile(filepath.Join(claudeDir, "plugins", "installed_plugins.json"))
+	if err != nil {
+		return nil
+	}
+	var f struct {
+		Plugins map[string][]struct {
+			InstallPath string `json:"installPath"`
+		} `json:"plugins"`
+	}
+	if json.Unmarshal(b, &f) != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(f.Plugins))
+	for k := range f.Plugins {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []plugin
+	for _, k := range keys {
+		name, _, _ := strings.Cut(k, "@")
+		for _, e := range f.Plugins[k] {
+			if e.InstallPath != "" {
+				out = append(out, plugin{name: name, dir: e.InstallPath})
+			}
+		}
+	}
 	return out
 }
 
