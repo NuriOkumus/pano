@@ -454,4 +454,118 @@ ON_BOOT.push(async () => {
   setInterval(() => !document.hidden && loadOffice(), 20_000);
 });
 
+/* ---------- Kullanım ---------- */
+const FAM = { fable: "#c5a3ff", opus: "#e08a4f", sonnet: "#9fb4d8", haiku: "#8fd6b4", other: "#c9c6cf" };
+const famOrder = ["fable", "opus", "sonnet", "haiku", "other"];
+const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+function niceStep(x) { const p = 10 ** Math.floor(Math.log10(x || 1)); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+function fmtDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" }); }
+
+function renderDaily(days, fams) {
+  const box = $("#daily");
+  const W = Math.max(300, Math.round(box.clientWidth)), H = Math.max(120, Math.round(box.clientHeight)), padL = 44, padB = 22, padT = 8;
+  const max = Math.max(1, ...days.map((d) => fams.reduce((a, f) => a + (d.tokens[f] || 0), 0)));
+  const step = niceStep(max / 3), top = Math.ceil(max / step) * step;
+  const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Günlük token kullanımı, en yüksek gün ${tok(max)} token` });
+  for (let v = 0; v <= top; v += step) {
+    const y = H - padB - (v / top) * (H - padB - padT);
+    s.append(svg("line", { x1: padL, x2: W, y1: y, y2: y, stroke: "rgba(255,255,255,.1)", "stroke-width": 1 }));
+    const tx = svg("text", { x: padL - 6, y: y + 4, "text-anchor": "end", class: "axis" });
+    tx.textContent = tok(v);
+    s.append(tx);
+  }
+  const bw = (W - padL) / days.length, every = Math.max(1, Math.ceil(days.length / 5));
+  days.forEach((d, i) => {
+    let y = H - padB;
+    const x = padL + i * bw + bw * 0.16, w = bw * 0.68;
+    const g = svg("g"), title = svg("title");
+    const total = fams.reduce((a, f) => a + (d.tokens[f] || 0), 0);
+    title.textContent = `${fmtDate(d.date)}: ${tok(total)} token, ${usd(d.cost)}`;
+    g.append(title);
+    for (const f of fams) {
+      const v = d.tokens[f] || 0;
+      if (!v) continue;
+      const hgt = (v / top) * (H - padB - padT);
+      y -= hgt;
+      g.append(svg("rect", { x, y, width: w, height: Math.max(hgt, 0.5), fill: FAM[f], rx: 1.5 }));
+    }
+    s.append(g);
+    if ((days.length - 1 - i) % every === 0) {
+      const cx = x + w / 2, anchor = cx > W - 24 ? "end" : "middle";
+      const tx = svg("text", { x: anchor === "end" ? W - 1 : cx, y: H - 6, "text-anchor": anchor, class: "axis" });
+      tx.textContent = fmtDate(d.date);
+      s.append(tx);
+    }
+  });
+  box.replaceChildren(s);
+}
+function renderLamps(hm) {
+  const max = Math.max(1, ...hm.flat());
+  const kids = [h("span")];
+  for (let hr = 0; hr < 24; hr++) kids.push(h("span", {}, hr % 6 === 0 ? String(hr).padStart(2, "0") : ""));
+  hm.forEach((row, d) => {
+    kids.push(h("span", {}, DAYS[d]));
+    row.forEach((v, hr) => kids.push(h("span", { class: "cell" + (v ? " on" : ""), style: `--v:${(v / max).toFixed(3)}`, title: `${DAYS[d]} ${String(hr).padStart(2, "0")}:00, ${v} istek` })));
+  });
+  $("#lamps").replaceChildren(...kids);
+}
+function bars(sel, list) {
+  const max = Math.max(1, ...list.map((x) => x.count));
+  $(sel).replaceChildren(...(list.length
+    ? list.map((x) => h("li", {}, h("span", { class: "t", title: x.name }, x.name), h("span", { class: "meter" }, h("i", { style: `width:${(x.count / max) * 100}%` })), h("span", { class: "n" }, nf.format(x.count))))
+    : [h("li", { class: "empty" }, "Bu dönemde kayıt yok.")]));
+  fitList($(sel));
+}
+VIEWS.kullanim = () => {
+  const ov = state.ov;
+  if (!ov) return;
+  const t = ov.totals, w = ov.windows;
+  const cells = [
+    ["Son 5 saat", tok(w.fiveHour) + " tok", usd(w.fiveCost) + " API fiyatıyla"],
+    ["Son 7 gün", tok(w.sevenDay) + " tok", usd(w.sevenCost) + " API fiyatıyla"],
+    [`${ov.days} günlük maliyet`, usd(t.cost), "tahmini, faturan değil"],
+    ["Önbellek isabeti", pct(t.cacheHit), "girdinin önbellekten okunan payı"],
+    ["Oturum", nf.format(t.sessions), nf.format(t.prompts) + " prompt"],
+    ["Alt ajan payı", pct(t.subagentShare), nf.format(t.calls) + " istek"],
+  ];
+  $("#sum").replaceChildren(...cells.map(([k, v, s]) => h("div", {}, h("dt", {}, k), h("dd", {}, v, h("small", {}, s)))));
+  const fams = famOrder.filter((f) => ov.daily.some((d) => d.tokens[f]));
+  const totalBy = Object.fromEntries(fams.map((f) => [f, ov.daily.reduce((a, d) => a + (d.tokens[f] || 0), 0)]));
+  const all = Object.values(totalBy).reduce((a, b) => a + b, 0) || 1;
+  $("#legend").replaceChildren(...fams.map((f) => h("li", {}, h("i", { style: `background:${FAM[f]}` }), `${f} ${pct(totalBy[f] / all)}`)));
+  renderDaily(ov.daily, fams);
+  renderLamps(ov.heatmap);
+  bars("#tools", ov.tools);
+  bars("#projects", ov.projects);
+  $("#usage-note").textContent = `Son ${ov.days} gün. Tutarlar API liste fiyatıyla tahmin; abonelikte gerçek maliyetin bu değil.`;
+  document.querySelectorAll("#days button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.days === state.days)));
+};
+ON_BOOT.push(() => {
+  document.querySelectorAll("#days button").forEach((b) => b.addEventListener("click", () => {
+    state.days = +b.dataset.days;
+    loadUsage().catch(() => toast("Kullanım yüklenemedi", { kind: "err" }));
+  }));
+});
+
+/* ---------- Kayıtlar ---------- */
+VIEWS.kayitlar = () => {
+  const ul = $("#runs");
+  $("#runs-sub").textContent = `${state.runs.length} iş`;
+  if (!state.runs.length) {
+    ul.replaceChildren(h("li", { class: "empty" }, "Henüz iş yok. Ana sayfadaki kutudan bir iş ver."));
+    $("#run-detail").replaceChildren(h("p", { class: "empty" }, "Soldan bir iş seç."));
+    return;
+  }
+  if (!state.runs.some((r) => r.id === state.runSel)) state.runSel = state.runs[0].id;
+  ul.replaceChildren(...state.runs.map((r) => h("li", {}, h("button", {
+    type: "button", class: "run", "aria-current": String(r.id === state.runSel),
+    onclick: () => { state.runSel = r.id; VIEWS.kayitlar(); },
+  },
+    h("span", { class: "lamp" + (r.status === "running" ? " running" : r.status === "error" ? " error" : "") }),
+    h("span", { class: "t" }, runTitle(r)),
+    h("span", { class: "c" }, usd(r.cost || 0)),
+    h("span", { class: "m" }, `${base(r.cwd)} · ${r.model} · ${ago(sinceISO(r.started))} önce`)))));
+  $("#run-detail").replaceChildren(...runDetail(state.runs.find((r) => r.id === state.runSel)).filter(Boolean));
+};
+
 boot();
