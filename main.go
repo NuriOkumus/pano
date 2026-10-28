@@ -311,7 +311,7 @@ func (a *App) startRun(r *http.Request) (any, error) {
 		return nil, errors.New("JSON only")
 	}
 	var req RunRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req); err != nil {
 		return nil, errors.New("bad JSON")
 	}
 	files := a.files()
@@ -355,7 +355,9 @@ func (a *App) officeStart(r *http.Request) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "sh", filepath.Join(dir, "scripts", "start.sh"), "--no-browser").CombinedOutput()
+	cmd := exec.CommandContext(ctx, "sh", filepath.Join(dir, "scripts", "start.sh"), "--no-browser")
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
 	text := clip(ansiRe.ReplaceAllString(strings.TrimSpace(string(out)), ""), 2000)
 	if err != nil {
 		if text == "" {

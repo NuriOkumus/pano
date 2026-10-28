@@ -38,8 +38,8 @@ type Config struct {
 	// Prompt cache lifetime in minutes, used for the warm/cold badge.
 	CacheTTLMinutes int `json:"cache_ttl_minutes"`
 	// Run panel: the claude binary and extra args appended to every run,
-	// e.g. ["--permission-mode", "acceptEdits"]. Kept empty by default, so
-	// background runs cannot edit files or run tools that need approval.
+	// e.g. ["--permission-mode", "acceptEdits"]. They come after the permission
+	// mode, so a --permission-mode given here wins over permission_mode.
 	ClaudeBin  string   `json:"claude_bin"`
 	ExtraArgs  []string `json:"extra_args"`
 	Models     []string `json:"models"`

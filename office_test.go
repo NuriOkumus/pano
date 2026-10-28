@@ -39,3 +39,17 @@ func TestOfficeStart(t *testing.T) {
 		t.Errorf("no office folder: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestRunBodyCap(t *testing.T) {
+	app, err := newApp(serveOpts{addr: "127.0.0.1:7878", claudeDir: t.TempDir(), cfgPath: filepath.Join(t.TempDir(), "config.json"), demo: true})
+	must(t, err)
+	body := `{"model":"haiku","prompt":"` + strings.Repeat("a", 100) + `","pad":"` + strings.Repeat("b", 20000) + `"}`
+	req := httptest.NewRequest("POST", "http://127.0.0.1:7878/api/run", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Pano-Token", app.token)
+	rec := httptest.NewRecorder()
+	app.handler().ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "bad JSON") {
+		t.Fatalf("a 20 kB body was cut off: %d %s", rec.Code, rec.Body.String())
+	}
+}

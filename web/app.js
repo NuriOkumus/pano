@@ -159,7 +159,8 @@ function renderSessions() {
   const list = state.sessions, warm = list.filter((s) => s.cache === "warm").length;
   $("#sessions-sub").textContent = `${warm} sıcak · ${list.length - warm} soğuk`;
   $("#sessions").replaceChildren(...(list.length ? list.map(sessionRow) : [h("li", { class: "empty" }, "Henüz oturum yok.")]));
-  fitList($("#sessions"));
+  const hidden = fitList($("#sessions"));
+  $("#sessions-all").textContent = hidden ? `+ ${hidden} oturum →` : "tümü →";
 }
 
 function skillLabel(name) {
@@ -240,6 +241,10 @@ function runDetail(r) {
 }
 
 Object.assign(RENDER, {
+  allSessions: () => listDrawer("Oturumlar", (q) => {
+    const query = q.trim().toLowerCase();
+    return state.sessions.filter((s) => !query || [s.title, s.project, s.cwd].some((v) => (v || "").toLowerCase().includes(query)));
+  }, sessionRow),
   session: (s) => [
     h("h3", { id: "drawer-title" }, s.title || "(başlıksız)"),
     facts([
@@ -332,6 +337,7 @@ function pick(i) {
   if (s) setPrompt("/" + s.name + " ");
 }
 function setPrompt(text) {
+  closeDrawer();
   if (state.tab !== "ana") switchTab("ana");
   const ta = $("#prompt-text");
   ta.value = text;
@@ -385,8 +391,12 @@ function renderJobs() {
   $("#jobs").textContent = `${n} iş çalışıyor`;
 }
 async function loadRuns() {
+  if (loadRuns.busy) { loadRuns.again = true; return; }
+  loadRuns.busy = true;
   clearTimeout(loadRuns.t);
-  if (!document.hidden) {
+  do {
+    loadRuns.again = false;
+    if (document.hidden) break;
     try {
       const runs = await api("/api/runs");
       for (const r of runs) {
@@ -398,9 +408,11 @@ async function loadRuns() {
       }
       state.runs = runs;
       renderJobs();
-      if (state.tab === "kayitlar") VIEWS.kayitlar();
+      if (state.tab === "kayitlar") VIEWS.kayitlar(true);
     } catch { /* next poll */ }
-  }
+  } while (loadRuns.again);
+  loadRuns.busy = false;
+  clearTimeout(loadRuns.t);
   loadRuns.t = setTimeout(loadRuns, state.runs.some((r) => r.status === "running") ? 3000 : 15000);
 }
 
@@ -426,6 +438,7 @@ ON_BOOT.push(async () => {
   $("#skill-search").addEventListener("input", renderSkills);
   $("#skills-all").addEventListener("click", () => openDrawer("skills"));
   $("#memory-all").addEventListener("click", () => openDrawer("memories"));
+  $("#sessions-all").addEventListener("click", () => openDrawer("allSessions"));
   $("#jobs").addEventListener("click", () => switchTab("kayitlar"));
   $("#prompt").addEventListener("submit", sendPrompt);
   $("#prompt-cwd").addEventListener("change", (e) => store.set("pano.cwd", e.target.value));
@@ -548,7 +561,10 @@ ON_BOOT.push(() => {
 });
 
 /* ---------- Kayıtlar ---------- */
-VIEWS.kayitlar = () => {
+VIEWS.kayitlar = (polled) => {
+  const sig = state.runs.map((r) => `${r.id}:${r.status}:${r.cost}`).join("|") + "#" + state.runSel;
+  if (polled && sig === VIEWS.kayitlar.sig) return;
+  VIEWS.kayitlar.sig = sig;
   const ul = $("#runs");
   $("#runs-sub").textContent = `${state.runs.length} iş`;
   if (!state.runs.length) {

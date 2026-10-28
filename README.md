@@ -18,12 +18,13 @@ it on one screen at http://127.0.0.1:7878, without scrolling, over a sky that fo
 - **Runs (Kayıtlar):** background runs with status, cost and output. Reports are saved to
   `~/.local/share/pano/runs/`.
 
-Nothing leaves your computer. pano reads files, never calls a model itself, and listens on
-127.0.0.1 only.
+pano itself only reads local files and listens on 127.0.0.1. Background runs you start go
+through your own `claude` CLI, and with the default `auto` permission mode they can edit files
+and run commands in the folder you pick.
 
 ## Run it
 
-Needs Go 1.22 or newer.
+Needs Go 1.24 or newer.
 
 ```sh
 cd pano
