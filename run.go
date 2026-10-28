@@ -172,7 +172,7 @@ func (r *Runner) exec(run *Run) {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(r.cfg.MaxRunMins)*time.Minute)
 		defer cancel()
-		args := append([]string{"-p", prompt, "--model", run.Model, "--output-format", "json"}, r.cfg.ExtraArgs...)
+		args := runArgs(r.cfg, prompt, run.Model)
 		cmd := exec.CommandContext(ctx, r.cfg.ClaudeBin, args...)
 		cmd.Dir = run.Cwd
 		cmd.Stdin = nil
@@ -233,4 +233,27 @@ func (r *Runner) save(run *Run) {
 	}
 	b, _ := json.MarshalIndent(run, "", "  ")
 	_ = os.WriteFile(filepath.Join(r.dir, run.ID+".json"), b, 0o600)
+}
+
+// runArgs builds the claude command line. The permission mode comes from the
+// config unless extra_args already sets one. A prompt starting with "-" gets
+// a leading space so claude does not read it as a flag.
+func runArgs(cfg Config, prompt, model string) []string {
+	if strings.HasPrefix(prompt, "-") {
+		prompt = " " + prompt
+	}
+	args := []string{"-p", prompt, "--model", model, "--output-format", "json"}
+	if cfg.PermissionMode != "" && !hasFlag(cfg.ExtraArgs, "--permission-mode") {
+		args = append(args, "--permission-mode", cfg.PermissionMode)
+	}
+	return append(args, cfg.ExtraArgs...)
+}
+
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
+			return true
+		}
+	}
+	return false
 }

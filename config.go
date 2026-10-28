@@ -44,6 +44,9 @@ type Config struct {
 	ExtraArgs  []string `json:"extra_args"`
 	Models     []string `json:"models"`
 	MaxRunMins int      `json:"max_run_minutes"`
+	// claude --permission-mode for background runs. auto lets Claude decide
+	// per action, like an interactive session in auto mode.
+	PermissionMode string `json:"permission_mode"`
 	// agent-office-3d folder that `pano` starts and `pano stop` stops. Empty:
 	// ~/agent-office-3d or ~/Projects/agent-office-3d, whichever exists.
 	OfficeDir string `json:"office_dir"`
@@ -62,6 +65,7 @@ func defaultConfig() Config {
 		ClaudeBin:       "claude",
 		Models:          []string{"haiku", "sonnet", "opus"},
 		MaxRunMins:      30,
+		PermissionMode:  "auto",
 	}
 }
 
@@ -93,9 +97,15 @@ func loadConfig(path string) Config {
 	if user.MaxRunMins > 0 {
 		cfg.MaxRunMins = user.MaxRunMins
 	}
+	if permissionModes[user.PermissionMode] {
+		cfg.PermissionMode = user.PermissionMode
+	}
 	cfg.OfficeDir = user.OfficeDir
 	return cfg
 }
+
+// The modes claude accepts (claude --help, v2.1.296).
+var permissionModes = map[string]bool{"acceptEdits": true, "auto": true, "bypassPermissions": true, "manual": true, "dontAsk": true, "plan": true}
 
 func (c Config) price(family string) Price {
 	if p, ok := c.Prices[family]; ok {

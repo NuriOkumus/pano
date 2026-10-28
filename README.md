@@ -78,6 +78,7 @@ switches on within 20 seconds of the server starting.
   "models": ["haiku", "sonnet", "opus"],
   "extra_args": [],
   "max_run_minutes": 30,
+  "permission_mode": "auto",
   "office_dir": "~/agent-office-3d"
 }
 ```
@@ -85,8 +86,11 @@ switches on within 20 seconds of the server starting.
 - `prices`: USD per million tokens, per model family. Cache writes default to 1.25x input and
   cache reads to 0.1x; set `cache_write` / `cache_read` to override. These are estimates for the
   dashboard. On a Pro / Max plan your real cost is the subscription, not these numbers.
-- `extra_args`: added to every background run. Empty by default, so a run cannot edit files or use
-  tools that need approval. `["--permission-mode", "acceptEdits"]` lets runs edit files.
+- `permission_mode`: `claude --permission-mode` for background runs, `auto` by default (Claude decides
+  per action, as in an interactive session in auto mode). Also `acceptEdits`, `plan`, `dontAsk`,
+  `manual`, `bypassPermissions`.
+- `extra_args`: added to every background run, after the permission mode. A `--permission-mode` here
+  wins over `permission_mode`.
 - `office_dir`: the agent-office-3d folder `pano` starts and `pano stop` stops. Empty by default:
   `~/agent-office-3d` or `~/Projects/agent-office-3d`, whichever exists.
 
