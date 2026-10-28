@@ -34,8 +34,16 @@ import (
 	"time"
 )
 
-//go:embed web/index.html web/fonts
+//go:embed web/index.html web/app.js web/app.css web/sky.js web/pano.svg web/fonts
 var webFS embed.FS
+
+// assetTypes are the only files /assets/ serves.
+var assetTypes = map[string]string{
+	"app.js":   "text/javascript; charset=utf-8",
+	"sky.js":   "text/javascript; charset=utf-8",
+	"app.css":  "text/css; charset=utf-8",
+	"pano.svg": "image/svg+xml",
+}
 
 const version = "0.1.0"
 
@@ -139,6 +147,7 @@ func (a *App) handler() http.Handler {
 	mux.HandleFunc("GET /{$}", a.index)
 	mux.HandleFunc("GET /health", a.health)
 	mux.HandleFunc("GET /fonts/{name}", a.font)
+	mux.HandleFunc("GET /assets/{name}", a.asset)
 	mux.HandleFunc("GET /api/overview", a.api(a.overview))
 	mux.HandleFunc("GET /api/sessions", a.api(a.sessions))
 	mux.HandleFunc("GET /api/skills", a.api(a.skills))
@@ -225,6 +234,22 @@ func (a *App) font(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "font/woff2")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = w.Write(b)
+}
+
+func (a *App) asset(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	ct, ok := assetTypes[name]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := webFS.ReadFile("web/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
 	_, _ = w.Write(b)
 }
 
