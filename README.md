@@ -1,22 +1,21 @@
 # pano
 
-A local dashboard for Claude Code, built like an electrical panel ("pano"). It reads what Claude Code
-already keeps in `~/.claude` and shows it on one page at http://127.0.0.1:7878:
+A local dashboard for Claude Code. It reads what Claude Code already keeps in `~/.claude` and shows
+it on one screen at http://127.0.0.1:7878, without scrolling, over a sky that follows your clock:
 
-- **Rating plate:** tokens in the last 5 hours and 7 days, cost at API list prices, cache hit rate,
-  sessions, subagent share.
-- **Meters (Sayaçlar):** daily tokens per model (models drawn as phase wires: L1 opus, L2 sonnet,
-  L3 haiku, N fable), an hour-of-week lamp grid, top tools and projects.
-- **Circuits (Devreler):** every skill and slash command as a breaker. Its width is the tokens its
-  `SKILL.md` loads when used, so heavy skills stand out. Click one to see details and run it in the
-  background with `claude -p` on the model and folder you pick.
-- **Lines (Hatlar):** recent sessions, with a warm / cold prompt-cache lamp, the context the next
-  message will re-send and what that message costs warm or cold.
-- **Single-line diagram (Tek hat şeması):** every `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` Claude
-  loads, and the files they point to. A dashed red line is a link to a file that does not exist.
-- **Live office (Canlı ofis):** [agent-office-3d](https://github.com/ozyusuf/agent-office-3d)
-  embedded, when it runs on 127.0.0.1:7847.
-- **Log (Kayıt defteri):** background runs with status, cost and output. Reports are saved to
+- **Sessions (Oturumlar):** recent sessions with a warm / cold prompt-cache lamp, the context the
+  next message re-sends and what it costs warm or cold; "Devam et" copies the resume command.
+- **Skills (Skill'ler):** installed skills, slash commands and plugin skills by use, plus builtin
+  skills Claude called; size, description and path in the drawer.
+- **Memory (Hafıza):** every `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` Claude loads and the files they
+  point to; a red dot marks a broken link.
+- **Live office:** [agent-office-3d](https://github.com/ozyusuf/agent-office-3d) in the middle when it
+  runs on 127.0.0.1:7847, with a button that starts it when it does not.
+- **Prompt bar:** give Claude a job in the background (`claude -p`) in a folder and model you pick;
+  `/` picks a skill. Runs use permission mode `auto` by default.
+- **Usage (Kullanım):** tokens and cost at API list prices for 7 / 30 / 90 days, daily tokens per
+  model, an hour-of-week map, top tools and projects.
+- **Runs (Kayıtlar):** background runs with status, cost and output. Reports are saved to
   `~/.local/share/pano/runs/`.
 
 Nothing leaves your computer. pano reads files, never calls a model itself, and listens on
@@ -119,4 +118,4 @@ only a few fields and skips lines it does not understand. `go test ./...` covers
 
 ## Licenses
 
-pano: MIT. Fonts: Barlow and Barlow Condensed, SIL Open Font License 1.1 (`web/fonts/OFL.txt`).
+pano: MIT. Font: Barlow, SIL Open Font License 1.1 (`web/fonts/OFL.txt`).
