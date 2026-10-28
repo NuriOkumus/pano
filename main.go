@@ -12,6 +12,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
@@ -25,7 +26,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -143,6 +146,7 @@ func (a *App) handler() http.Handler {
 	mux.HandleFunc("GET /api/runs", a.api(a.runs))
 	mux.HandleFunc("POST /api/run", a.api(a.startRun))
 	mux.HandleFunc("GET /api/office", a.api(a.office))
+	mux.HandleFunc("POST /api/office/start", a.api(a.officeStart))
 	mux.HandleFunc("GET /api/meta", a.api(a.meta))
 	return a.guard(mux)
 }
@@ -184,6 +188,9 @@ func (a *App) api(h func(*http.Request) (any, error)) http.HandlerFunc {
 			code := http.StatusBadRequest
 			if errors.Is(err, errBusy) {
 				code = http.StatusTooManyRequests
+			}
+			if errors.Is(err, errOfficeMissing) {
+				code = http.StatusNotFound
 			}
 			w.WriteHeader(code)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -300,6 +307,38 @@ func (a *App) office(r *http.Request) (any, error) {
 		st.Up, st.Version = officeHealth(a.officeURL)
 	}
 	return st, nil
+}
+
+var (
+	errOfficeMissing = errors.New("agent-office-3d folder not found")
+	ansiRe           = regexp.MustCompile("\x1b\\[[0-9;]*m")
+)
+
+// officeStart runs agent-office-3d's own start script; pano starts nothing
+// else. The script's output goes back to the page.
+func (a *App) officeStart(r *http.Request) (any, error) {
+	if a.officeURL == "" {
+		return nil, errors.New("the office panel is turned off (-office off)")
+	}
+	if a.demo {
+		return map[string]any{"ok": true, "output": "demo"}, nil
+	}
+	home, _ := os.UserHomeDir()
+	dir := findOfficeDir(a.cfg.OfficeDir, home)
+	if dir == "" {
+		return nil, errOfficeMissing
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "sh", filepath.Join(dir, "scripts", "start.sh"), "--no-browser").CombinedOutput()
+	text := clip(ansiRe.ReplaceAllString(strings.TrimSpace(string(out)), ""), 2000)
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		}
+		return nil, errors.New(text)
+	}
+	return map[string]any{"ok": true, "output": text}, nil
 }
 
 func officeHealth(base string) (up bool, version string) {
