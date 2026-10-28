@@ -32,6 +32,7 @@ var skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,80}$`)
 func scanSkills(claudeDir string, projects []string, usage map[string]stamp) []Skill {
 	var out []Skill
 	seen := map[string]bool{}
+	names := map[string]bool{}
 	add := func(s Skill) {
 		key := s.Scope + "|" + s.Owner + "|" + s.Name
 		real := s.Path
@@ -46,6 +47,7 @@ func scanSkills(claudeDir string, projects []string, usage map[string]stamp) []S
 		if u, ok := usage[s.Name]; ok {
 			s.Uses, s.LastUsed = u.Count, u.Last
 		}
+		names[s.Name] = true
 		out = append(out, s)
 	}
 
@@ -78,6 +80,19 @@ func scanSkills(claudeDir string, projects []string, usage map[string]stamp) []S
 			s.Name = pl.name + ":" + s.Name
 			add(s)
 		}
+	}
+
+	// Skills Claude called that have no file here: built into Claude Code or
+	// served by claude.ai. They keep their use count; their size is unknown.
+	var extra []string
+	for name, u := range usage {
+		if u.Tool && !names[name] && skillNameRe.MatchString(name) {
+			extra = append(extra, name)
+		}
+	}
+	sort.Strings(extra)
+	for _, name := range extra {
+		out = append(out, Skill{Name: name, Kind: "skill", Scope: "builtin", Uses: usage[name].Count, LastUsed: usage[name].Last})
 	}
 
 	sort.Slice(out, func(i, j int) bool {

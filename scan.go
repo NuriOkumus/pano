@@ -68,6 +68,7 @@ type request struct {
 type stamp struct {
 	Count int
 	Last  time.Time
+	Tool  bool // called through the Skill tool at least once (not only typed as /name)
 }
 
 type fileData struct {
@@ -184,7 +185,7 @@ func (fd *fileData) consume(raw []byte, seen map[string]bool) {
 			fd.UserMsgs++
 		}
 		if mm := cmdNameRe.FindStringSubmatch(text); mm != nil {
-			fd.skill(mm[1], ts)
+			fd.skill(mm[1], ts, false)
 		}
 		if fd.Title == "" && !l.IsSidechain {
 			if t := cleanTitle(text); t != "" {
@@ -211,7 +212,7 @@ func (fd *fileData) consume(raw []byte, seen map[string]bool) {
 				name = in.Command
 			}
 			if name != "" {
-				fd.skill(name, ts)
+				fd.skill(name, ts, true)
 			}
 		}
 	}
@@ -236,7 +237,7 @@ func (fd *fileData) consume(raw []byte, seen map[string]bool) {
 	}
 }
 
-func (fd *fileData) skill(name string, ts time.Time) {
+func (fd *fileData) skill(name string, ts time.Time, tool bool) {
 	name = strings.TrimPrefix(strings.TrimSpace(name), "/")
 	if name == "" {
 		return
@@ -247,6 +248,7 @@ func (fd *fileData) skill(name string, ts time.Time) {
 		fd.Skills[name] = s
 	}
 	s.Count++
+	s.Tool = s.Tool || tool
 	if ts.After(s.Last) {
 		s.Last = ts
 	}
@@ -666,6 +668,7 @@ func skillUsage(files map[string]*fileData) map[string]stamp {
 		for k, v := range fd.Skills {
 			cur := out[k]
 			cur.Count += v.Count
+			cur.Tool = cur.Tool || v.Tool
 			if v.Last.After(cur.Last) {
 				cur.Last = v.Last
 			}

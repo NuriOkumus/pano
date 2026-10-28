@@ -25,7 +25,7 @@ func TestInstalledPluginSkills(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "plugins", "installed_plugins.json"),
 		`{"version":2,"plugins":{"superpowers@official":[{"scope":"user","installPath":`+strconv.Quote(inst)+`,"version":"6.3.0"}]}}`)
 
-	usage := map[string]stamp{"superpowers:brainstorming": {Count: 10, Last: time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)}}
+	usage := map[string]stamp{"superpowers:brainstorming": {Count: 10, Last: time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC), Tool: true}}
 	got := map[string]Skill{}
 	for _, s := range scanSkills(dir, nil, usage) {
 		got[s.Name] = s
@@ -41,5 +41,30 @@ func TestInstalledPluginSkills(t *testing.T) {
 		if strings.HasPrefix(name, "6.3.0:") || strings.Contains(name, "access") {
 			t.Errorf("unexpected skill %q", name)
 		}
+	}
+}
+
+func TestBuiltinSkillsKeepTheirUses(t *testing.T) {
+	usage := map[string]stamp{
+		"anthropic-skills:pdf": {Count: 3, Last: time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC), Tool: true},
+		// Typed /clear: a Claude Code command, never called through the Skill tool.
+		"clear": {Count: 9, Last: time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)},
+	}
+	got := map[string]Skill{}
+	for _, s := range scanSkills(t.TempDir(), nil, usage) {
+		got[s.Name] = s
+	}
+	if p, ok := got["anthropic-skills:pdf"]; !ok || p.Scope != "builtin" || p.Uses != 3 || p.Tokens != 0 || p.Path != "" {
+		t.Errorf("anthropic-skills:pdf = %+v", p)
+	}
+	if _, ok := got["clear"]; ok {
+		t.Error("a typed /clear is not a skill")
+	}
+}
+
+func TestSkillToolCallsAreMarked(t *testing.T) {
+	usage := skillUsage(NewStore(writeClaudeDir(t)).Refresh())
+	if !usage["k8s-health"].Tool || usage["calibrate"].Tool {
+		t.Errorf("k8s-health came from the Skill tool, calibrate was typed: %+v", usage)
 	}
 }
