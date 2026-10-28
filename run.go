@@ -23,6 +23,7 @@ import (
 type Run struct {
 	ID       string    `json:"id"`
 	Skill    string    `json:"skill"`
+	Prompt   string    `json:"prompt,omitempty"` // what claude -p received
 	Model    string    `json:"model"`
 	Cwd      string    `json:"cwd"`
 	Note     string    `json:"note,omitempty"`
@@ -36,10 +37,11 @@ type Run struct {
 }
 
 type RunRequest struct {
-	Skill string `json:"skill"`
-	Model string `json:"model"`
-	Cwd   string `json:"cwd"`
-	Note  string `json:"note"`
+	Skill  string `json:"skill"`
+	Note   string `json:"note"`
+	Prompt string `json:"prompt"`
+	Model  string `json:"model"`
+	Cwd    string `json:"cwd"`
 }
 
 type Runner struct {
@@ -96,15 +98,9 @@ func (r *Runner) List() []Run {
 var errBusy = errors.New("two runs are already going; wait for one to finish")
 
 func (r *Runner) Start(req RunRequest, skills []Skill, projects []string) (*Run, error) {
-	found := false
-	for _, s := range skills {
-		if s.Name == req.Skill {
-			found = true
-			break
-		}
-	}
-	if !found || !skillNameRe.MatchString(req.Skill) {
-		return nil, errors.New("unknown skill")
+	prompt, err := runPrompt(req, skills)
+	if err != nil {
+		return nil, err
 	}
 	okModel := false
 	for _, m := range r.cfg.Models {
@@ -129,10 +125,6 @@ func (r *Runner) Start(req RunRequest, skills []Skill, projects []string) (*Run,
 		}
 		cwd = req.Cwd
 	}
-	note := strings.TrimSpace(req.Note)
-	if len([]rune(note)) > 2000 {
-		return nil, errors.New("note is too long (2000 characters max)")
-	}
 	select {
 	case r.slot <- struct{}{}:
 	default:
@@ -143,7 +135,7 @@ func (r *Runner) Start(req RunRequest, skills []Skill, projects []string) (*Run,
 	_, _ = rand.Read(b)
 	run := &Run{
 		ID:    time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b),
-		Skill: req.Skill, Model: req.Model, Cwd: cwd, Note: note,
+		Skill: req.Skill, Prompt: prompt, Model: req.Model, Cwd: cwd, Note: strings.TrimSpace(req.Note),
 		Status: "running", Started: time.Now(),
 	}
 	r.mu.Lock()
@@ -156,10 +148,7 @@ func (r *Runner) Start(req RunRequest, skills []Skill, projects []string) (*Run,
 
 func (r *Runner) exec(run *Run) {
 	defer func() { <-r.slot }()
-	prompt := "/" + run.Skill
-	if run.Note != "" {
-		prompt += " " + run.Note
-	}
+	prompt := run.Prompt
 	var result string
 	var cost float64
 	var turns int
@@ -220,7 +209,7 @@ func (r *Runner) save(run *Run) {
 		return
 	}
 	report := filepath.Join(r.dir, run.ID+".md")
-	md := "# /" + run.Skill + "\n\n" +
+	md := "# " + runTitle(run) + "\n\n" +
 		"- model: " + run.Model + "\n- folder: " + run.Cwd + "\n- started: " + run.Started.Format(time.RFC3339) +
 		"\n- status: " + run.Status + "\n\n" + run.Result + "\n"
 	if os.WriteFile(report, []byte(md), 0o600) == nil {
@@ -233,6 +222,55 @@ func (r *Runner) save(run *Run) {
 	}
 	b, _ := json.MarshalIndent(run, "", "  ")
 	_ = os.WriteFile(filepath.Join(r.dir, run.ID+".json"), b, 0o600)
+}
+
+// runPrompt is what claude -p gets: "/skill note" for a skill run, or the
+// user's own prompt. A prompt that starts with "/" must name a known skill.
+func runPrompt(req RunRequest, skills []Skill) (string, error) {
+	known := func(name string) bool {
+		for _, s := range skills {
+			if s.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	if req.Skill != "" {
+		if !skillNameRe.MatchString(req.Skill) || !known(req.Skill) {
+			return "", errors.New("unknown skill")
+		}
+		note := strings.TrimSpace(req.Note)
+		if len([]rune(note)) > 2000 {
+			return "", errors.New("note is too long (2000 characters max)")
+		}
+		if note == "" {
+			return "/" + req.Skill, nil
+		}
+		return "/" + req.Skill + " " + note, nil
+	}
+	p := strings.TrimSpace(req.Prompt)
+	if p == "" {
+		return "", errors.New("empty prompt")
+	}
+	if len([]rune(p)) > 8000 {
+		return "", errors.New("prompt is too long (8000 characters max)")
+	}
+	if strings.HasPrefix(p, "/") {
+		f := strings.Fields(p[1:])
+		if len(f) == 0 || !known(f[0]) {
+			return "", errors.New("unknown skill in the prompt")
+		}
+	}
+	return p, nil
+}
+
+// runTitle names a run in lists and reports: the skill, or the prompt's first line.
+func runTitle(run *Run) string {
+	if run.Skill != "" {
+		return "/" + run.Skill
+	}
+	first, _, _ := strings.Cut(run.Prompt, "\n")
+	return clip(strings.TrimSpace(first), 80)
 }
 
 // runArgs builds the claude command line. The permission mode comes from the
