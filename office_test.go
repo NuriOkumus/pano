@@ -40,6 +40,24 @@ func TestOfficeStart(t *testing.T) {
 	}
 }
 
+// A start script that succeeds but leaves a child holding its stdout (an
+// older agent-office-3d start.sh did) is still a successful start.
+func TestOfficeStartWithLingeringChild(t *testing.T) {
+	office := t.TempDir()
+	writeFile(t, filepath.Join(office, "scripts", "start.sh"), "echo started\nsleep 5 &\n")
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+	must(t, os.WriteFile(cfgPath, []byte(`{"office_dir":`+strconv.Quote(office)+`}`), 0o644))
+	app, err := newApp(serveOpts{addr: "127.0.0.1:7878", claudeDir: t.TempDir(), cfgPath: cfgPath, office: "http://127.0.0.1:7847"})
+	must(t, err)
+	req := httptest.NewRequest("POST", "http://127.0.0.1:7878/api/office/start", nil)
+	req.Header.Set("X-Pano-Token", app.token)
+	rec := httptest.NewRecorder()
+	app.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "started") {
+		t.Fatalf("start with a lingering child: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRunBodyCap(t *testing.T) {
 	app, err := newApp(serveOpts{addr: "127.0.0.1:7878", claudeDir: t.TempDir(), cfgPath: filepath.Join(t.TempDir(), "config.json"), demo: true})
 	must(t, err)

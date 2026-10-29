@@ -359,7 +359,9 @@ func (a *App) officeStart(r *http.Request) (any, error) {
 	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	text := clip(ansiRe.ReplaceAllString(strings.TrimSpace(string(out)), ""), 2000)
-	if err != nil {
+	// ErrWaitDelay: the script exited cleanly but left a child holding its
+	// output (the server it started); that is a successful start.
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		if text == "" {
 			text = err.Error()
 		}

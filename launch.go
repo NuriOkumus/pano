@@ -126,9 +126,12 @@ func findOfficeDir(configured, home string) string {
 	return ""
 }
 
+// runScript runs one of agent-office-3d's scripts in a session of its own, so
+// the server start.sh leaves behind outlives the terminal that ran `pano`.
 func runScript(dir, name string, args ...string) bool {
 	cmd := exec.Command("sh", append([]string{filepath.Join(dir, "scripts", name)}, args...)...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	detach(cmd)
 	return cmd.Run() == nil
 }
 
