@@ -290,7 +290,7 @@ async function loadOffice() {
   state.office = key;
   const stage = $("#stage");
   if (!st.url) return stage.replaceChildren(card("Ofis gizli", "pano -office off ile başlatıldı."));
-  if (st.up) return stage.replaceChildren(h("iframe", { src: st.url, title: "agent-office-3d canlı ofis", referrerpolicy: "no-referrer" }));
+  if (st.up) return stage.replaceChildren(h("iframe", { src: st.url + "/?embed=1", title: "agent-office-3d canlı ofis", referrerpolicy: "no-referrer" }));
   const out = h("pre", { hidden: true });
   const btn = h("button", {
     type: "button", class: "btn", onclick: async () => {
